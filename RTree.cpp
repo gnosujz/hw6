@@ -1,7 +1,7 @@
 ﻿#include "Geometry.h"
 #include "RTree.h"
 #include"assert.h"
-#include<random>
+
 namespace hw6 {
 
 	// RNode 实现
@@ -27,13 +27,13 @@ namespace hw6 {
 		features.erase(where);
 		if (features.empty())
 			features.shrink_to_fit();
-		/*features.erase(where);
-		if (features.empty())
-			features.shrink_to_fit(); // free memory unused but allocated*/
+			/*features.erase(where);
+			if (features.empty())
+				features.shrink_to_fit(); // free memory unused but allocated*/
 	}
 
 	void RNode::remove(RNode* child) {
-
+		
 		for (int i = 0; i < childrenNum; ++i)
 			if (children[i] == child) {
 				--childrenNum;
@@ -81,7 +81,7 @@ namespace hw6 {
 			++interiorNum;
 			for (int i = 0; i < childrenNum; ++i)
 				children[i]->countNode(interiorNum, leafNum);
-			assert(childrenNum == static_cast<int>(children.size()));
+				assert(childrenNum == static_cast<int>(children.size()));
 			/*for (auto* c : children)
 				if (c)
 					c->countNode(interiorNum, leafNum);*/
@@ -105,7 +105,7 @@ namespace hw6 {
 		else
 			for (int i = 0; i < childrenNum; ++i)
 				children[i]->draw();
-		assert(childrenNum == static_cast<int>(children.size()));
+				assert(childrenNum == static_cast<int>(children.size()));
 	}
 
 	void RNode::rangeQuery(const Envelope& rect, std::vector<Feature>& result) {
@@ -124,12 +124,11 @@ namespace hw6 {
 				assert(childrenNum == static_cast<int>(children.size()));
 			}
 		}
-
+		
 		// filter step (选择查询区域与几何对象包围盒相交的几何对象)
 		// 注意R树区域查询仅返回候选集，精炼步在hw6的rangeQuery中完成
 	}
 
-	//递归选择要插入的节点，新增面积越小越好
 	RNode* RNode::pointInLeafNode(double x, double y) {
 		// Task pointInLeafNode
 		/* TODO */
@@ -157,7 +156,7 @@ namespace hw6 {
 		return children[bestIdx]->pointInLeafNode(x, y);
 	}
 
-	//Rnode重新计算包围盒
+	//Rnode计算包围盒
 	void RNode::recalcBBox() {
 		if (isLeafNode()) {
 			if (features.empty()) { bbox = Envelope(); return; }
@@ -191,7 +190,7 @@ namespace hw6 {
 			height = root->countHeight(height);
 	}
 
-	//节点在分裂后或删除后应维持的最小子条目数
+	//不明白为什么是40%
 	static int MIN_CHILDREN_FROM_MAX(int maxChildren) {
 		return std::max(1, (int)std::ceil(maxChildren * 0.4)); // 40% 最小填充
 	}
@@ -230,43 +229,26 @@ namespace hw6 {
 	}
 
 	void RTree::insertFeature(const Feature& f) {
-		// 假定 f 是点（Envelope 的 min==max）
+		// 在 insertFeature(const Feature& f) 开头
 		if (!root) {
 			root = new RNode(f.getEnvelope());
 			root->add(f);
 			return;
 		}
-
-		Envelope env = f.getEnvelope();
-		// 额外校验（可选）：
-		// if (!(env.minX == env.maxX && env.minY == env.maxY)) { /* 处理非点或抛错 */ }
-
-		// 优先使用点专用选择函数
-		RNode* leaf = this->pointInLeafNode(env.getMaxX(), env.getMinY());
-		if (!leaf) {
-			// 回退：使用通用选择
-			leaf = chooseleaf(root, env);
-			if (!leaf) leaf = root;
-		}
-
-		// 插入
+		RNode* leaf = chooseleaf(root, f.getEnvelope());
 		leaf->add(f);
-
-		// 处理溢出或更新 bbox
 		if ((int)leaf->getFeatureNum() > maxChildren) {
-			// 按你实现的签名调用 splitNode（此处假定无参数）
 			RNode* newNode = leaf->splitNode(leaf);
 			updateTree(leaf, newNode);
 		}
 		else {
+			// update ancestors' bbox
 			RNode* cur = leaf;
-			while (cur) {
-				cur->recalcBBox();
-				cur = cur->getParent();
+			while (cur) { cur->recalcBBox(); cur = cur->getParent(); 
 			}
 		}
 	}
-	//quatric spliting 当超过节点所能存储的最大几何特征时分裂节点。推荐的优化：bulk-loading（STR）
+
 	RNode* RNode::splitNode(RNode* node) {
 		int minChildren = MIN_CHILDREN_FROM_MAX(maxChildren);
 		if (node->isLeafNode()) {
@@ -489,9 +471,9 @@ namespace hw6 {
 
 		if (features.empty()) { root = nullptr; return true; }
 
-		std::vector<Feature> shuffled = features;
-		std::mt19937_64 rng(std::random_device{}());
-		std::shuffle(shuffled.begin(), shuffled.end(), rng);
+		// 可选随机化以获得更平衡树
+		//std::vector<Feature> shuffled = features;
+		//std::shuffle(shuffled.begin(), shuffled.end(),);
 
 		for (const Feature& f : features) insertFeature(f);
 
@@ -509,125 +491,94 @@ namespace hw6 {
 			root->rangeQuery(rect, features);
 	}
 
+	struct PQItem {
+		RNode* node;
+		double dist;
+		PQItem(RNode* n = nullptr, double d = 0.0) : node(n), dist(d) {}
+	};
+
+	// 比较器：小的 dist 优先
+	struct PQCmp { bool operator()(PQItem const& a, PQItem const& b) const { return a.dist > b.dist; } };
+
+	// 返回点到包围盒的最短距离（下界），不是角点最大距
+	static double envelopeDist(const Envelope& e, double x, double y) {
+		double x1 = e.getMinX(), y1 = e.getMinY(), x2 = e.getMaxX(), y2 = e.getMaxY();
+		double dx = 0.0, dy = 0.0;
+		if (x < x1) dx = x1 - x;
+		else if (x > x2) dx = x - x2;
+		if (y < y1) dy = y1 - y;
+		else if (y > y2) dy = y - y2;
+		return std::hypot(dx, dy); // 最短欧氏距离到矩形
+	}
+
 	bool RTree::NNQuery(double x, double y, std::vector<Feature>& features) {
-		if (!root) return false;
-		const Envelope& rootEnv = root->getEnvelope();
-		if (!rootEnv.contain(x, y)) return false;
+		printf("RTree::NNQuery start: using root env (%f,%f)-(%f,%f)\n",
+			root->getEnvelope().getMinX(), root->getEnvelope().getMinY(),
+			root->getEnvelope().getMaxX(), root->getEnvelope().getMaxY());
 
 		features.clear();
+		if (!root) return false;
 
-		// 初始 minDist：根包围盒的较大边长（保守）
-		double minDist = std::max(rootEnv.getWidth(), rootEnv.getHeight());
+		std::priority_queue<PQItem, std::vector<PQItem>, PQCmp> pq;
+		double rootDist = envelopeDist(root->getEnvelope(), x, y);
+		pq.push(PQItem(root, rootDist));
+		printf("enqueue root dist=%f\n", rootDist);
 
-		// 尝试用包含点的叶节点或其子节点快速缩小 minDist
-		RNode* pNode = root->pointInLeafNode(x, y);
-		if (!pNode) { // 保护性检查（若实现保证不为空可去掉）
-			Envelope rect(x - minDist, x + minDist, y - minDist, y + minDist);
-			rangeQuery(rect, features);
-			return !features.empty();
-		}
+		double bestDist = std::numeric_limits<double>::infinity();
+		std::vector<Feature> candidates;
 
-		if (pNode->isLeafNode()) {
-			size_t fn = pNode->getFeatureNum();
-			for (size_t i = 0; i < fn; ++i) {
-				minDist = std::min(minDist, pNode->getFeature(i).maxDistance2Envelope(x, y));
-				if (minDist <= 0.0) break;
-			}
-		}
-		else {
-			int cn = pNode->getChildNum();
-			for (int i = 0; i < cn; ++i) {
-				RNode* child = pNode->getChildNode(i);
-				if (!child) continue;
-				// 用子节点包围盒的 maxDistance2Envelope（假设 RNode 提供该接口），
-				// 否则退回为遍历其 features（但那更慢）
-				// 这里仍使用 child->getFeatureNum 遍历 features 保持通用性
-				size_t fn = child->getFeatureNum();
-				for (size_t j = 0; j < fn; ++j) {
-					minDist = std::min(minDist, child->getFeature(j).maxDistance2Envelope(x, y));
-					if (minDist <= 0.0) break;
+		while (!pq.empty()) {
+			PQItem cur = pq.top(); pq.pop();
+			if (!cur.node) continue;
+
+			// 剪枝：当前节点下界距离 >= bestDist 则不可更优
+			if (cur.dist >= bestDist) break;
+
+			RNode* node = cur.node;
+			if (node->isLeafNode()) {
+				int fn = node->getFeatureNum();
+				printf("leaf node features=%d\n", fn);
+				for (int i = 0; i < fn; ++i) {
+					const Feature& f = node->getFeature(i);
+					printf("  leaf feature name=%s env=(%f,%f)-(%f,%f)\n",
+						f.getName().c_str(),
+						f.getEnvelope().getMinX(), f.getEnvelope().getMinY(),
+						f.getEnvelope().getMaxX(), f.getEnvelope().getMaxY());
 				}
-				if (minDist <= 0.0) break;
+
+				// 对叶内每个 Feature，用包围盒到点的最小距离作为下界 d_env
+				for (int i = 0; i < fn; ++i) {
+					const Feature& f = node->getFeature(i);
+					double d_env = envelopeDist(f.getEnvelope(), x, y); // 包围盒到点的最小距离
+
+					// 若下界 >= bestDist，则此 feature 及同 leaf 中更远的 feature 可剪掉
+					if (d_env >= bestDist) continue;
+
+					// 否则把 feature 加入候选，并更新 bestDist 为下界（越小越好）
+					candidates.push_back(f);
+					if (d_env < bestDist) bestDist = d_env;
+				}
+			}
+			else {
+				int cn = node->getChildNum();
+				for (int i = 0; i < cn; ++i) {
+					RNode* c = node->getChildNode(i);
+					if (!c) continue;
+					double d = envelopeDist(c->getEnvelope(), x, y);
+					if (d < bestDist) {
+						pq.push(PQItem(c, d));
+						printf("enqueue child dist=%f\n", d);
+					}
+				}
 			}
 		}
 
-		// 若 minDist 非负（通常是），构造查询矩形并执行 rangeQuery
-		if (minDist < 0.0) minDist = 0.0;
-		Envelope rect(x - minDist, x + minDist, y - minDist, y + minDist);
-		rangeQuery(rect, features);
+		features = std::move(candidates);
+		printf("RTree::NNQuery end: root env (%f,%f)-(%f,%f) found=%zu\n",
+			root->getEnvelope().getMinX(), root->getEnvelope().getMinY(),
+			root->getEnvelope().getMaxX(), root->getEnvelope().getMaxY(), features.size());
 
 		return !features.empty();
-	}
-
-	//基于距离的空间关联=====================================
-	static inline double envelopeMinDistSquared(const Envelope& a, const Envelope& b) {
-		double dx = 0.0;
-		if (a.getMaxX() < b.getMinX()) dx = b.getMinX() - a.getMaxX();
-		else if (b.getMaxX() < a.getMinX()) dx = a.getMinX() - b.getMaxX();
-		double dy = 0.0;
-		if (a.getMaxY() < b.getMinY()) dy = b.getMinY() - a.getMaxY();
-		else if (b.getMaxY() < a.getMinY()) dy = a.getMinY() - b.getMaxY();
-		return dx * dx + dy * dy;
-	}
-
-	static double pointToSegmentDist2(double px, double py, double ax, double ay, double bx, double by) {
-		double vx = bx - ax, vy = by - ay;
-		double wx = px - ax, wy = py - ay;
-		double c1 = vx * wx + vy * wy;
-		if (c1 <= 0.0) {
-			double dx = px - ax, dy = py - ay; return dx * dx + dy * dy;
-		}
-		double c2 = vx * vx + vy * vy;
-		if (c2 <= c1) {
-			double dx = px - bx, dy = py - by; return dx * dx + dy * dy;
-		}
-		double t = c1 / c2;
-		double projx = ax + t * vx, projy = ay + t * vy;
-		double dx = px - projx, dy = py - projy;
-		return dx * dx + dy * dy;
-	}
-
-	// 点到折线平方距离（poly: vector<pair<double,double>>）
-	static double pointToPolylineDist2(double px, double py, const std::vector<std::pair<double, double>>& poly) {
-		double best = std::numeric_limits<double>::infinity();
-		if (poly.size() == 1) {
-			double dx = px - poly[0].first, dy = py - poly[0].second;
-			return dx * dx + dy * dy;
-		}
-		for (size_t i = 0; i + 1 < poly.size(); ++i) {
-			double d2 = pointToSegmentDist2(px, py, poly[i].first, poly[i].second, poly[i + 1].first, poly[i + 1].second);
-			if (d2 < best) best = d2;
-		}
-		return best;
-	}
-
-	std::vector<std::pair<Feature, Feature>> RTree::spatialJoinWithin(RTree& other, double D, bool inclusive) {
-		std::vector<std::pair<Feature, Feature>> out;
-		if (!this->root || !other.root) return out;
-		double D2 = D * D;
-		treeMatchNodesByDist(this->root, other.root, D2, &out, nullptr, nullptr, inclusive);
-		return out;
-	}
-
-	void RTree::spatialJoinWithin(RTree& other, double D, RTree::MatchCallback cb, void* userData, bool inclusive) {
-		if (!this->root || !other.root) return;
-		this->root->getEnvelope().print();
-		double D2 = D * D;
-		treeMatchNodesByDist(this->root, other.root, D2, nullptr, cb, userData, inclusive);
-	}
-
-	// 递归实现
-	void hw6::RTree::treeMatchNodesByDist(RNode* a, RNode* b, double D2,
-		std::vector<std::pair<Feature, Feature>>* out,
-		RTree::MatchCallback cb, void* userData, bool inclusive) {
-		if (!a || !b) return;
-
-		// 快速包围盒下界剪枝
-		double mind2 = envelopeMinDistSquared(a->getEnvelope(), b->getEnvelope());
-		if (mind2 > D2) return;
-
-		// 两叶：逐对比较（外层选较小集合）
-
 	}
 
 } // namespace hw6

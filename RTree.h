@@ -135,16 +135,7 @@ namespace hw6 {
 			else return nullptr;
 		}
 
-		void draw() override { if (root != nullptr) root->draw();}
-
-		using MatchCallback = void(*)(const Feature&, const Feature&, void* userData);
-
-		std::vector<std::pair<Feature, Feature>> spatialJoinWithin(RTree& other, double D, bool inclusive = true);
-		void spatialJoinWithin(RTree& other, double D, MatchCallback cb, void* userData = nullptr, bool inclusive = true);
-
-		void treeMatchNodesByDist(RNode* a, RNode* b, double D2,
-			std::vector<std::pair<Feature, Feature>>* out,
-			MatchCallback cb, void* userData, bool inclusive);
+		void draw() override { if (root != nullptr) root->draw(); }
 
 	public:
 		static void test(int t);
