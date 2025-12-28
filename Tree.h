@@ -2,7 +2,7 @@
 #define TREE_H_INCLUDED
 #include <string>
 #include "Geometry.h"
-
+#include <cmath>   
 namespace hw6 {
 
 	class Feature {

@@ -55,6 +55,7 @@ namespace hw6 {
 			(y - point->y) * (y - point->y));
 	}
 
+	////////////////////////////////////////////////////////////////
 	double Point::distance(const LineString* line) const {
 		double mindist = line->getPointN(0).distance(this);
 		for (size_t i = 0; i < line->numPoints() - 1; ++i) {
@@ -74,7 +75,7 @@ namespace hw6 {
 			double t = (c2 == 0) ? 0 : c1 / c2;
 			t = std::max(0.0, std::min(1.0, t));
 			double projx = x1 + t * vx, projy = y1 + t * vy;
-			dist = std::sqrt((px - projx) * (px - projx) + (py - projy) * (py - projy));
+			dist = std::sqrt((px - projx)*(px - projx) + (py - projy)*(py - projy));
 
 			if (dist < mindist)
 				mindist = dist;
@@ -82,6 +83,7 @@ namespace hw6 {
 		return mindist;
 	}
 
+	//////////////////////////////////////////////////////////
 	double Point::distance(const Polygon* polygon) const {
 		LineString line = polygon->getExteriorRing();
 
