@@ -377,8 +377,8 @@ void NNQuery(hw6::Point p) {
 	}*/
 }
 
-void spatialJoin_Road_Station(double D) {
-	cout << "Spatial Join: road ↔ station, distance <= " << D << endl;
+void spatialJoin_QuadTree(double D) {
+	cout << "Spatial Join (QuadTree Nested Loop with Index), distance <= " << D << endl;
 
 	if (!pointTree) {
 		cout << "Point tree not constructed." << endl;
@@ -428,7 +428,7 @@ void spatialJoin_Road_Station(double D) {
 }
 
 void spatialJoin_RTree(double D) {
-	cout << "Spatial Join (RTree Tree Matching), D = " << D << endl;
+	cout << "Spatial Join (RTree Tree Matching), distance <= " << D << endl;
 
 	if (!pointTree || !roadTree) {
 		cout << "Tree not constructed." << endl;
@@ -647,7 +647,7 @@ void processNormalKeys(unsigned char key, int x, int y) {
 		break;
 	case 'A':
 	case 'a':
-		spatialJoin_Road_Station(0.00001); // 距离阈值 100
+		spatialJoin_QuadTree(0.00001); // 距离阈值 100
 		break;
 	case 'C':
 	case 'c':
@@ -701,8 +701,8 @@ int main(int argc, char* argv[]) {
 		<< "  s  : range search for stations\n"
 		<< "  N  : nearest road search\n"
 		<< "  n  : nearest station search\n"
-		<< "  A/a  : spatial join (road-station within distance)\n"
-		<< "  C/c  : spatial join (road-station within distance)(RTree)\n"
+		<< "  A/a  : spatial join (Nested Loop with Index)(QuadTree)\n"
+		<< "  C/c  : spatial join (Tree Matching)(RTree)\n"
 		<< "  B/b: Bicycle data\n"
 		<< "  T/t: Taxi data\n"
 		<< "  R/r: show Road\n"
