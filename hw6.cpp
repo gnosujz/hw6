@@ -237,45 +237,6 @@ void rangeQuery() {
 	else if (mode == RANGELINE)
 		roadTree->rangeQuery(selectedRect, candidateFeatures);
 
-	// refine step (精确判断时，需要去重，避免查询区域和几何对象的重复计算)
-	// TODO
-	/*selectedFeatures.clear();
-	std::vector<std::string> seenNames;
-	std::vector<const hw6::Geometry*> seenGeoms;
-
-	for (const auto& f : candidateFeatures) {
-		const std::string& id = f.getName();
-		bool seen = false;
-		if (!id.empty()) {
-			for (const auto& s : seenNames) {
-				if (s == id) { seen = true; break; }
-			}
-			if (seen) continue;
-			seenNames.push_back(id);
-		}
-		else {
-			const hw6::Geometry* g = f.getGeom();
-			if (!g) continue;
-			for (const auto& pg : seenGeoms) {
-				if (pg == g) { seen = true; break; }
-			}
-			if (seen) continue;
-			seenGeoms.push_back(g);
-		}
-
-		const hw6::Geometry* geom = f.getGeom();
-		if (!geom) continue;
-
-		// 用包围盒相交作为判断（若有更精确方法可替换）
-		const hw6::Envelope& fe = f.getEnvelope();
-		bool accept = !(fe.getMaxX() < selectedRect.getMinX() ||
-			fe.getMinX() > selectedRect.getMaxX() ||
-			fe.getMaxY() < selectedRect.getMinY() ||
-			fe.getMinY() > selectedRect.getMaxY());
-		if (accept) selectedFeatures.push_back(f);
-	}
-
-	glutPostRedisplay();*/
 	selectedFeatures.clear();
 	size_t numOfFeatures = candidateFeatures.size();
 	//去重
@@ -301,7 +262,6 @@ void NNQuery(hw6::Point p) {
 	vector<hw6::Feature> candidateFeatures;
 
 	const auto& env = (mode == NNPOINT ? pointTree->getEnvelope() : roadTree->getEnvelope());
-	//printf("NNQuery tree env: (%f,%f)-(%f,%f)\n", env.getMinX(), env.getMinY(), env.getMaxX(), env.getMaxY());
 	// filter step (使用四叉树获得距离较近的几何特征候选集)
 	if (mode == NNPOINT)
 		pointTree->NNQuery(p.getX(), p.getY(), candidateFeatures);
@@ -314,12 +274,8 @@ void NNQuery(hw6::Point p) {
 	double bestDist = std::numeric_limits<double>::infinity();
 	int bestIdx = -1;
 	for (size_t i = 0; i < candidateFeatures.size(); ++i) {
-		//printf("query pt=(%.12f,%.12f)\n", p.getX(), p.getY());
 		const auto& f = candidateFeatures[i];
-		//double d_env = envelopeDist(f.getEnvelope(), p.getX(), p.getY());
 		double d_geom = f.distance(p.getX(), p.getY());
-		//printf("geomDist raw=%a\n", f.distance(p.getX(), p.getY()));
-		//printf("cand[%zu] name=%s geom=%p geomDist=%.12f\n",i, f.getName().c_str(), (void*)f.getGeom(),  d_geom);
 		if (d_geom < bestDist) {
 			bestDist = d_geom;
 			bestIdx = (int)i;
@@ -328,53 +284,11 @@ void NNQuery(hw6::Point p) {
 	if (bestIdx >= 0) {
 		selectedFeatures.push_back(candidateFeatures[bestIdx]);
 		nearestFeature = candidateFeatures[bestIdx];
-		//printf("chosen idx=%d name=%s geomDist=%.12f\n", bestIdx, nearestFeature.getName().c_str(), bestDist);
 	}
 	else {
 		nearestFeature = hw6::Feature();
 	}
-	/*size_t numOfFeatures = candidateFeatures.size();
-	for (size_t i = 0; i < numOfFeatures; i++) {
-		int n = selectedFeatures.size();
-		bool f = true;
-		for (size_t j = 0; j < n; j++) {
-			if (selectedFeatures[j].getGeom() == candidateFeatures[i].getGeom()) {
-				f = false;
-			}
-		}
-		if (f) {
-			selectedFeatures.push_back(candidateFeatures[i]);
-		}
-	}
-	numOfFeatures = 0;
-	if (!selectedFeatures.empty()) {
-		numOfFeatures = selectedFeatures.size();
-		size_t index = 0;
-		double minDist = 0;
-		if (mode == NNPOINT) {
-			minDist = p.distance((hw6::Point*)(selectedFeatures[0].getGeom()));
-		}
-		else if (mode == NNLINE) {
-			minDist = selectedFeatures[0].distance(p.getX(), p.getY());
-		}
-		for (size_t i = 0; i < numOfFeatures; i++) {
-			double dist = 0;
-			if (mode == NNPOINT) {
-				dist = p.distance((hw6::Point*)(selectedFeatures[i].getGeom()));
-			}
-			else if (mode == NNLINE) {
-				dist = selectedFeatures[i].distance(p.getX(), p.getY());
-			}
-			if (dist < minDist) {
-				index = i;
-				minDist = dist;
-			}
-		}
-		nearestFeature = selectedFeatures[index];
-	}
-	else {
-		nearestFeature = hw6::Feature();
-	}*/
+	
 }
 
 void spatialJoin_QuadTree(double D) {
