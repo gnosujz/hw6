@@ -92,7 +92,7 @@ namespace hw6 {
 
         return newNode;
     }
-    //在节点的 keys_ 中找到第一个不小于 key 的位置索引
+    //在节点的 keys_ 中找到第一个不小于 key 的位置索引（即 lower_bound 的返回位置）。
     // 此索引用于决定应该访问哪个子节点或在哪个位置插入新键。
     int BPlusNode::findKeyIndex(uint64_t key) const {
         auto it = std::lower_bound(keys_.begin(), keys_.end(), key);
@@ -414,97 +414,11 @@ namespace hw6 {
     BPlusNode* BPlusTree::findLeafByHilbert(uint64_t hValue) const {
         return findLeaf(hValue);
     }
-
-    /*void BPlusTree::computeHilbertRange(const Envelope& rect,
-        std::vector<std::pair<uint64_t, uint64_t>>& ranges) const {
-        ranges.clear();
-        // grid size
-        uint32_t n = static_cast<uint32_t>(1u << hilbert_.getOrder());
-        const Envelope& bbox = hilbert_.getBBox();
-        double xmin = bbox.getMinX(), ymin = bbox.getMinY();
-        double xmax = bbox.getMaxX(), ymax = bbox.getMaxY();
-        double dx = xmax - xmin; if (dx <= 0) dx = 1e-9;
-        double dy = ymax - ymin; if (dy <= 0) dy = 1e-9;
-        auto cellEnvelope = [&](uint32_t cx, uint32_t cy, uint32_t size)->Envelope {
-            double cellW = dx / static_cast<double>(n);
-            double cellH = dy / static_cast<double>(n);
-            double x0 = xmin + static_cast<double>(cx) * cellW;
-            double y0 = ymin + static_cast<double>(cy) * cellH;
-            double x1 = xmin + static_cast<double>(cx + size) * cellW;
-            double y1 = ymin + static_cast<double>(cy + size) * cellH;
-            return Envelope(x0, y0, x1, y1);
-            };
-        auto cellHilbertRange = [&](uint32_t cx, uint32_t cy, uint32_t size)->std::pair<uint64_t, uint64_t> {
-            uint32_t x0 = cx, y0 = cy;
-            uint32_t x1 = std::min<uint32_t>(cx + size - 1, n - 1);
-            uint32_t y1 = std::min<uint32_t>(cy + size - 1, n - 1);
-            uint64_t h0 = hilbert_.xyToHilbertIndex(x0, y0);
-            uint64_t h1 = hilbert_.xyToHilbertIndex(x1, y1);
-            if (h0 <= h1) return { h0, h1 };
-            return { h1, h0 };
-            };
-
-        std::vector<std::pair<uint64_t, uint64_t>> raw;
-        std::function<void(uint32_t, uint32_t, uint32_t)> dfs = [&](uint32_t cx, uint32_t cy, uint32_t size) {
-            Envelope cenv = cellEnvelope(cx, cy, size);
-            if (!cenv.intersect(rect)) return;
-            if (rect.contain(cenv) || size == 1) {
-                raw.push_back(cellHilbertRange(cx, cy, size));
-                return;
-            }
-            uint32_t h = size / 2;
-            if (h == 0) h = 1;
-            dfs(cx, cy, h);
-            if (cx + h < n) dfs(cx + h, cy, h);
-            if (cy + h < n) dfs(cx, cy + h, h);
-            if (cx + h < n && cy + h < n) dfs(cx + h, cy + h, h);
-            };
-
-        dfs(0, 0, n);
-        if (raw.empty()) return;
-        std::sort(raw.begin(), raw.end(), [](auto& a, auto& b) { if (a.first != b.first) return a.first < b.first; return a.second < b.second; });
-        auto cur = raw[0];
-        for (size_t i = 1; i < raw.size(); ++i) {
-            if (raw[i].first <= cur.second + 1) cur.second = std::max(cur.second, raw[i].second);
-            else { ranges.push_back(cur); cur = raw[i]; }
-        }
-        ranges.push_back(cur);
-    }*/
-
-    /*void BPlusTree::rangeQueryByHilbert(uint64_t hMin, uint64_t hMax,
-        const Envelope& rect,
-        std::vector<Feature>& result) const {
-        if (!root_) return;
-
-        // 使用B+树索引快速定位第一个叶节点
-        BPlusNode* startLeaf = findLeafContainingOrAfter(hMin);
-        if (!startLeaf) return;
-
-        // 从起始叶节点开始顺序遍历
-        BPlusNode* current = startLeaf;
-        while (current) {
-            const auto& keys = current->getKeys();
-            const auto& features = current->getFeatures();
-
-            for (size_t i = 0; i < keys.size(); ++i) {
-                uint64_t key = keys[i];
-
-                // 如果key还没到范围内，跳过
-                if (key < hMin) continue;
-
-                // 如果key超过范围，提前终止整个查询
-                if (key > hMax) return;
-
-                // key在范围内，进行几何相交测试
-                if (features[i].getEnvelope().intersect(rect)) {
-                    result.push_back(features[i]);
-                }
-            }
-
-            // 移动到下一个叶节点
-            current = current->getNext();
-        }
-    }*/
+    // 通过 computeHilbertRange(rect, ranges) 计算与矩形可能对应的 Hilbert 值区间。
+    // 对每个 Hilbert 区间调用 rangeQueryByHilbert(hMin, hMax, rect, features) 
+    // 执行实际查询并把满足几何相交的 Feature 收集到结果集。
+    // 注：是按 hilbert 值定位叶
+    
 
     void BPlusTree::rangeQueryByHilbert(uint64_t hMin, uint64_t hMax,
         const Envelope& rect,
@@ -512,7 +426,7 @@ namespace hw6 {
     {
         if (!root_) return;
 
-        std::unordered_set<uint64_t> localSeen;
+        std::unordered_set<uint64_t> localSeen; // 局部缓冲，外部调用会合并到全局 seen
         BPlusNode* leaf = findLeafContainingOrAfter(hMin);
         if (!leaf) return;
 
@@ -530,8 +444,8 @@ namespace hw6 {
 
             for (size_t i = lo; i < keys.size(); ++i) {
                 uint64_t k = keys[i];
-                if (k > hMax) return;
-                if (localSeen.find(k) != localSeen.end()) continue;
+                if (k > hMax) return; // 完整终止整个区间查询
+                if (localSeen.find(k) != localSeen.end()) continue; // 本区间去重
                 if (feats[i].getEnvelope().intersect(rect)) {
                     result.push_back(feats[i]);
                     localSeen.insert(k);
@@ -546,6 +460,7 @@ namespace hw6 {
         std::vector<std::pair<uint64_t, uint64_t>>& rawIntervals) const
     {
         rawIntervals.clear();
+        // grid size n = 2^order
         uint32_t n = static_cast<uint32_t>(1u << hilbert_.getOrder());
         const Envelope& hb = hilbert_.getBBox();
         double xmin = hb.getMinX(), ymin = hb.getMinY();
@@ -557,6 +472,7 @@ namespace hw6 {
 
         std::function<void(uint32_t, uint32_t, uint32_t)> dfs =
             [&](uint32_t cx, uint32_t cy, uint32_t size) {
+            // compute envelope of this block
             double x0 = xmin + static_cast<double>(cx) * cellW;
             double y0 = ymin + static_cast<double>(cy) * cellH;
             double x1 = xmin + static_cast<double>(std::min<uint32_t>(cx + size, n)) * cellW;
@@ -566,6 +482,7 @@ namespace hw6 {
             if (!cellEnv.intersect(rect)) return;
 
             if (rect.contain(cellEnv) || size == 1) {
+                // compute Hilbert interval covering integer grid [cx, cx+size-1] x [cy, cy+size-1]
                 uint32_t xStart = cx;
                 uint32_t yStart = cy;
                 uint32_t xEnd = std::min<uint32_t>(cx + size - 1, n - 1);
@@ -577,6 +494,8 @@ namespace hw6 {
                 else rawIntervals.emplace_back(h1, h0);
                 return;
             }
+
+            // subdivide into up to 4 quadrants
             uint32_t half = size / 2;
             if (half == 0) half = 1;
             dfs(cx, cy, half);
@@ -587,6 +506,7 @@ namespace hw6 {
 
         dfs(0, 0, n);
 
+        // rawIntervals may have many intervals; merge overlapping / adjacent ones
         if (rawIntervals.empty()) return;
         std::sort(rawIntervals.begin(), rawIntervals.end(),
             [](const std::pair<uint64_t, uint64_t>& a, const std::pair<uint64_t, uint64_t>& b) {
@@ -617,7 +537,7 @@ namespace hw6 {
         if (intervals.empty()) return;
 
         std::unordered_set<uint64_t> seenKeys;
-        std::vector<Feature> candidates;
+        std::vector<Feature> candidates; // 收集候选（去重）
 
         for (const auto& pr : intervals) {
             uint64_t hMin = pr.first;
@@ -651,8 +571,10 @@ namespace hw6 {
                     }
                     if (seenKeys.find(key) != seenKeys.end()) continue;
 
+                    // 先用包围盒快速排除（和你现在一样）
                     if (!feats[i].getEnvelope().intersect(rect)) continue;
 
+                    // 记录候选并去重
                     candidates.push_back(feats[i]);
                     seenKeys.insert(key);
                 }
@@ -662,12 +584,20 @@ namespace hw6 {
         next_interval:
             continue;
         }
-        //精确判断，快一点
+
         for (const auto& f : candidates) {
+            // 优先使用要素的精确几何相交方法（如果有）
+            // 假设 Feature 有方法 intersects(const Geometry&/const Envelope&)
             bool preciseIntersect = false;
+
+            // 示例：如果 Feature 提供几何对象和 intersects(Envelope) 方法
+            // preciseIntersect = f.getGeometry().intersects(rect); // 如果有几何与矩形相交函数
+
+            // 回退：如果没有精确几何相交函数，则用 Envelope（已在候选阶段用过，仍可作为保底）
             if (!preciseIntersect) {
                 if (f.getEnvelope().intersect(rect)) preciseIntersect = true;
             }
+
             if (preciseIntersect) {
                 features.push_back(f);
             }
@@ -682,8 +612,11 @@ namespace hw6 {
         while (!current->isLeaf()) {
             const auto& keys = current->getKeys();
             const auto& children = current->children_;
+
+            // 修改：找第一个 hValue <= keys[i] 的位置
+            // 等价于：找第一个不满足 hValue > keys[i] 的位置
             size_t i = 0;
-            while (i < keys.size() && hValue > keys[i]) {
+            while (i < keys.size() && hValue > keys[i]) {  // 修改这里
                 i++;
             }
 
@@ -698,10 +631,12 @@ namespace hw6 {
     // ============================================================================
     // 最邻近查询实现
     // ============================================================================
+    
     bool BPlusTree::NNQuery(double x, double y, std::vector<Feature>& features) {
         features.clear();
         if (!root_) return false;
 
+        // compute initial Hilbert value and start leaf
         uint64_t qh = hilbert_.pointToHilbert(x, y);
         BPlusNode* startLeaf = findLeafByHilbert(qh);
         if (!startLeaf) return false;
@@ -727,6 +662,7 @@ namespace hw6 {
         };
         std::priority_queue<PQItem, std::vector<PQItem>, Cmp> pq;
 
+        // visited set to avoid re-pushing same leaf
         std::set<BPlusNode*> pushed;
         auto pushLeaf = [&](BPlusNode* leaf) {
             if (!leaf || pushed.count(leaf)) return;
@@ -736,6 +672,7 @@ namespace hw6 {
             pushed.insert(leaf);
             };
 
+        // initial seeds: startLeaf and its neighbors
         pushLeaf(startLeaf);
         if (startLeaf->getPrev()) pushLeaf(startLeaf->getPrev());
         if (startLeaf->getNext()) pushLeaf(startLeaf->getNext());
@@ -781,7 +718,7 @@ namespace hw6 {
     }
 
     // ============================================================================
-    // 基于距离的空间关联实现_1，比较快
+    // 基于距离的空间关联实现
     // ============================================================================
 
     std::vector<std::pair<Feature, Feature>> BPlusTree::spatialJoinWithin(
@@ -901,7 +838,7 @@ namespace hw6 {
     }
 
     // ============================================================================
-    // 辅助函数实现，在geometry里也有，此处为了方便
+    // 辅助函数实现
     // ============================================================================
 
     double BPlusTree::pointDistance(double x1, double y1, double x2, double y2) {

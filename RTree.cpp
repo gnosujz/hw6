@@ -6,10 +6,6 @@ namespace hw6 {
 
 	// RNode 实现
 	void RNode::add(RNode* child) {
-		/*
-		children[childrenNum] = child;
-		child->parent = this;
-		++childrenNum;*/
 		if (!child) return;
 		if (child->parent && child->parent != this) child->parent->remove(child);
 		children.push_back(child);
@@ -27,9 +23,7 @@ namespace hw6 {
 		features.erase(where);
 		if (features.empty())
 			features.shrink_to_fit();
-		/*features.erase(where);
-		if (features.empty())
-			features.shrink_to_fit(); // free memory unused but allocated*/
+	
 	}
 
 	void RNode::remove(RNode* child) {
@@ -42,15 +36,7 @@ namespace hw6 {
 				break;
 			}
 		recalcBBox();
-		/*if (!child) return;
-
-		auto it = std::find(children.begin(), children.end(), child);
-		if (it == children.end()) return;
-		if (it != children.end() - 1) std::iter_swap(it, children.end() - 1);
-		children.pop_back();
-		if (childrenNum > 0) --childrenNum;
-		child->parent = nullptr;
-		recalcBBox();*/
+		
 	}
 
 	Feature RNode::popBackFeature() {
@@ -64,13 +50,7 @@ namespace hw6 {
 		auto ret = children[childrenNum];
 		children[childrenNum] = nullptr;
 		return ret;
-		/*if (childrenNum == 0) return nullptr;
-		--childrenNum;
-		assert(childrenNum == static_cast<int>(children.size()));
-		RNode* ret = children.back();
-		children.pop_back();
-		if (ret) ret->parent = nullptr;
-		return ret;*/
+		
 	}
 
 	void RNode::countNode(int& interiorNum, int& leafNum) {
@@ -82,9 +62,7 @@ namespace hw6 {
 			for (int i = 0; i < childrenNum; ++i)
 				children[i]->countNode(interiorNum, leafNum);
 			assert(childrenNum == static_cast<int>(children.size()));
-			/*for (auto* c : children)
-				if (c)
-					c->countNode(interiorNum, leafNum);*/
+			
 		}
 	}
 
@@ -702,7 +680,7 @@ namespace hw6 {
 		return std::numeric_limits<double>::infinity();
 	}
 
-	// ============== Tree Matching 实现 ==============
+	// ============== Tree Matching 核心算法 ==============
 
 	void hw6::RTree::treeMatchNodesByDist(RNode* a, RNode* b, double D2,
 		std::vector<std::pair<Feature, Feature>>* out,
